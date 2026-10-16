@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rook Dispatch — quiet responder prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --ink:#1d2330; --mute:#6b7385; --line:#dfe3ec; --bg:#f4f6fa; --card:#fff; --amber:#b86e00; --amberbg:#fff4de; --green:#1b7a46; --greenbg:#e3f5ea; --blue:#2450c8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 system-ui,Segoe UI,Arial,sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:#1d2330; color:#fff; padding:12px 24px; display:flex; align-items:center; gap:16px; }
+  header b { font-size:17px; }
+  header span { color:#aab2c5; font-size:13px; }
+  .tabs { margin-left:auto; display:flex; gap:6px; }
+  .tabs button { background:#2e3750; color:#cfd6e6; border:0; padding:8px 14px; border-radius:6px; cursor:pointer; font:inherit; font-size:13px; }
+  .tabs button.on { background:#fff; color:#1d2330; font-weight:600; }
+  .note { background:#fffbe6; border-bottom:1px solid #eadf9a; padding:8px 24px; font-size:13px; color:#6b5b00; }
+  main { max-width:1000px; margin:24px auto; padding:0 16px; }
+  .view { display:none; } .view.on { display:block; }
+  h2 { margin:0 0 4px; font-size:20px; } .sub { color:var(--mute); margin:0 0 16px; font-size:13px; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th, td { text-align:left; padding:12px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mute); background:#fafbfd; }
+  tr:last-child td { border-bottom:0; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; }
+  .ok { background:var(--greenbg); color:var(--green); } .quiet { background:var(--amberbg); color:var(--amber); }
+  .marker.off { background:#fdeaea; border-color:#e9a9a9; color:#7a1f1f; }
+  .pill.off { background:#fdeaea; color:#b3261e; }
+  .marker { margin-top:8px; background:var(--amberbg); border:1px solid #f0cf8f; border-radius:6px; padding:10px 12px; font-size:13px; }
+  .marker.cleared { background:var(--greenbg); border-color:#a7dcbc; }
+  .marker .row { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button.act { background:var(--blue); color:#fff; border:0; padding:7px 12px; border-radius:6px; cursor:pointer; font:inherit; font-size:13px; }
+  button.act:disabled { background:#9aa6c9; cursor:default; }
+  button.ghost { background:#fff; color:var(--blue); border:1px solid var(--blue); padding:6px 12px; border-radius:6px; cursor:pointer; font:inherit; font-size:13px; }
+  .small { font-size:12px; color:var(--mute); }
+  .stage { display:flex; gap:32px; align-items:flex-start; flex-wrap:wrap; }
+  .phone { width:300px; background:#10141f; border-radius:34px; padding:14px; box-shadow:0 8px 30px rgba(0,0,0,.2); }
+  .screen { background:#fff; border-radius:22px; min-height:520px; padding:18px 16px; position:relative; }
+  .screen h3 { margin:0 0 2px; font-size:16px; } .screen .tiny { color:var(--mute); font-size:12px; }
+  .ping { margin-top:16px; border:2px solid var(--blue); border-radius:14px; padding:14px; }
+  .why { background:var(--amberbg); border-radius:8px; padding:8px 10px; font-size:12.5px; margin-bottom:10px; }
+  .big { display:flex; gap:8px; margin-top:12px; } .big button { flex:1; padding:11px 0; border-radius:10px; border:0; font:inherit; font-weight:600; cursor:pointer; }
+  .take { background:var(--green); color:#fff; } .pass { background:#e9ecf3; color:var(--ink); }
+  .timer { height:5px; background:#e3e7f0; border-radius:3px; margin-top:12px; overflow:hidden; } .timer i { display:block; height:100%; width:100%; background:var(--blue); }
+  .hist { margin-top:18px; font-size:13px; } .hist div { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line); }
+  .miss { color:var(--amber); font-weight:600; } .taken { color:var(--green); font-weight:600; }
+  .score { margin-top:16px; border:1px solid var(--line); border-radius:12px; padding:12px; }
+  .score .bar { position:relative; height:10px; background:#e3e7f0; border-radius:5px; margin:8px 0 4px; }
+  .score .bar i { display:block; height:100%; border-radius:5px; background:var(--amber); }
+  .score .bar u { position:absolute; left:50%; top:-3px; width:2px; height:16px; background:#6b7385; }
+  .score .row2 { display:flex; justify-content:space-between; font-size:11.5px; color:var(--mute); }
+  .alert { background:#fdeaea; border:1px solid #e9a9a9; color:#7a1f1f; border-radius:8px; padding:10px 14px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .alert.good { background:var(--greenbg); border-color:#a7dcbc; color:var(--green); }
+  .alert button { background:transparent; border:0; font-size:18px; cursor:pointer; color:inherit; }
+  .feed { background:var(--card); border:1px solid var(--line); border-radius:8px; }
+  .feed div { padding:9px 14px; border-bottom:1px solid var(--line); font-size:13px; display:flex; justify-content:space-between; gap:12px; }
+  .feed div:last-child { border-bottom:0; }
+  .side { flex:1; min-width:260px; font-size:13px; color:var(--mute); } .side b { color:var(--ink); }
+  .reset { float:right; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <b>Rook Dispatch</b><span>Prototype · fictional data · not the real product</span>
+  <div class="tabs">
+    <button id="t1" class="on" onclick="show(1)">Kip's console</button>
+    <button id="t2" onclick="show(2)">Meteor Mite's phone</button>
+  </div>
+</header>
+<div class="note">Illustrative. Days, wording and thresholds are placeholders, not agreed with engineering or design. <a href="#" class="reset" onclick="resetAll();return false">Reset demo</a></div>
+
+<main>
+<!-- HANDLER CONSOLE -->
+<section id="v1" class="view on">
+  <h2>My responders</h2>
+  <p class="sub">Handler: Kip · Eastgate · read-only status, no routing controls</p>
+  <table>
+    <tr><th>Responder</th><th>Status</th><th>Last ping</th><th>Pings this week</th></tr>
+    <tr>
+      <td><b>The Gale</b><div class="small">Eastgate</div></td>
+      <td><span class="pill ok">Active</span></td><td>12 min ago</td><td>13</td>
+    </tr>
+    <tr>
+      <td><b>Meteor Mite</b><div class="small">Eastgate</div></td>
+      <td><span id="mmPill" class="pill quiet">Quiet</span>
+        <div><button class="ghost" id="hbtn" onclick="handlerToggle()" style="margin-top:6px"></button></div>
+        <div id="marker" class="marker">
+          <b id="mTitle">Meteor Mite hasn't been pinged in 5 days.</b><br>
+          <span id="mBody">Recent pings were missed, not turned down. She's still marked available.</span>
+          <div class="row" id="mRow">
+            <button class="act" id="chk" onclick="checkAvail()">Check availability</button>
+            <span class="small" id="mStatus">A comeback ping goes to her phone today.</span>
+          </div>
+        </div>
+      </td>
+      <td id="mmLast">5 days ago</td><td id="mmWeek">0</td>
+    </tr>
+  </table>
+  <h2 style="margin-top:24px;font-size:16px">Recent activity</h2>
+  <div id="feed" class="feed"></div>
+  <p class="small" style="margin-top:12px">"Check availability" sends Meteor Mite a comeback ping. "Mark available / not available" changes her status on her phone too. Neither changes routing or scores. Switch to her phone tab to see the comeback ping.</p>
+</section>
+
+<!-- RESPONDER PHONE -->
+<section id="v2" class="view">
+  <h2>Meteor Mite's phone</h2>
+  <p class="sub">What the responder sees</p>
+  <div class="stage">
+    <div class="phone"><div class="screen" id="screen"></div></div>
+    <div class="side">
+      <p><b>What to try:</b> click Check availability on Kip's console to send the ping and start the 60-second clock. Then take it, turn it down, or let it run out, and go back to Kip's console to see his marker update.</p>
+      <p><b>Score panel:</b> shows her recent-acceptance score moving as she takes or turns down the ping. The 0.12 / 0.08 steps and the 0.50 neutral start come from the 4.2 routing code. The 0.14 starting value is invented, since real scores aren't in the database. Kip's console still shows no score and has no way to boost her.</p>
+      <p><b>Risk:</b> showing scores may invite gaming. Treat this as a question for Sofia and Wen Li, not a decision.</p>
+      <p><b>Not shown:</b> weights or any way for the handler to boost her. The ping is one extra offer in her home area, not a priority override.</p>
+      <p><b>Open question:</b> we can't see delivered or opened pings today, so a missed comeback ping may mean a dead phone.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<script>
+var S;
+function init(){ S = { t:60, reason:null, avail:true, score:0.14, dismissed:false, ping:false, result:null, nudged:false, hist:[["12 Aug","Missed",1],["13 Aug","Missed",1],["14 Aug","Missed",1]] }; render(); }
+function show(n){ document.getElementById('v1').className='view'+(n==1?' on':''); document.getElementById('v2').className='view'+(n==2?' on':'');
+  document.getElementById('t1').className=n==1?'on':''; document.getElementById('t2').className=n==2?'on':''; }
+function handlerToggle(){ S.avail=!S.avail; S.by=S.avail?null:'handler'; S.log=(S.log||[]); S.log.unshift('You marked Meteor Mite <b>'+(S.avail?'available':'not available')+'</b>'); render(); }
+function toggleAvail(){ S.by=S.avail?'self':null; S.avail=!S.avail; S.log=(S.log||[]); S.log.unshift(S.avail?'Meteor Mite marked herself <b>available</b>':'Meteor Mite marked herself <b>not available</b>'); render(); }
+function checkAvail(){ S.nudged=true; S.ping=true; S.t=60; render(); }
+function answer(r){ S.score=Math.max(0,Math.min(1,S.score+(r=='take'?0.08:-0.12))); S.ping=false; S.result=r; if(r=='pass') S.avail=false; S.hist.unshift(["Today", r=='take'?"Taken":"Turned down", r=='take'?2:1]); render(); }
+function resetAll(){ init(); show(1); }
+function dismissAlert(){ S.dismissed=true; render(); }
+function renderConsole(){
+  var ev=[];
+  (S.log||[]).forEach(function(t){ ev.push(['Just now', t]); });
+  if(S.reason) ev.push(['Just now','Meteor Mite says why she missed it: <b>'+S.reason+'</b>']);
+  if(S.result=='missed') ev.push(['Just now','Meteor Mite <b>missed</b> an Eastgate comeback ping (no answer in 60s)']);
+  else if(S.result) ev.push(['Just now', S.result=='pass'?'Meteor Mite <b>turned down</b> an Eastgate comeback ping':'Meteor Mite <b>took</b> an Eastgate comeback ping']);
+  if(S.nudged){ ev.push(['Just now','Comeback ping sent to Meteor Mite (Eastgate)']); ev.push(['Just now','You checked Meteor Mite\'s availability']); }
+  ev.push(['5 days ago','Meteor Mite missed a ping (last of 3)']);
+  document.getElementById('feed').innerHTML = ev.map(function(e){return '<div><span>'+e[1]+'</span><span class="small">'+e[0]+'</span></div>';}).join('');
+}
+var T=null;
+function ensureTimer(){ if(T){clearInterval(T);T=null;} if(S.ping && S.avail && S.t>0) T=setInterval(tick,1000); }
+function tick(){ S.t--; var n=document.getElementById('tnum'), b=document.getElementById('tbar');
+  if(n) n.textContent=S.t+'s left'; if(b) b.style.width=(S.t/60*100)+'%';
+  if(S.t<=0) expire(); }
+function expire(){ S.ping=false; S.result='missed'; S.score=Math.max(0,S.score-0.12); S.hist.unshift(["Today","Missed",1]); render(); }
+function skipTimer(){ S.t=Math.min(S.t,3); render(); }
+function chooseReason(r){ S.reason=r; if((r=='Not available' || r=='No service') && S.avail) S.askStatus=true; render(); }
+function answerStatus(yes){ S.askStatus=false; if(yes){ S.avail=false; S.by='self'; S.log=(S.log||[]); S.log.unshift('Meteor Mite marked herself <b>not available</b>'); } render(); }
+function render(){ renderConsole(); renderRest(); ensureTimer(); }
+function renderRest(){
+  var m=document.getElementById('marker'), pill=document.getElementById('mmPill');
+  m.className='marker'; pill.className='pill quiet'; pill.textContent='Quiet';
+  document.getElementById('mmLast').textContent='5 days ago'; document.getElementById('mmWeek').textContent='0';
+  var chk=document.getElementById('chk');
+  chk.disabled=S.nudged; chk.textContent=S.nudged?'Nudge sent':'Check availability';
+  document.getElementById('mStatus').textContent = S.nudged ? 'Availability check sent. A comeback ping is on her phone now.' : 'Sends her phone a comeback ping and starts her 60-second clock.';
+  if(S.result=='take'){
+    m.className='marker cleared'; pill.className='pill ok'; pill.textContent='Active';
+    document.getElementById('mTitle').textContent='Meteor Mite took a ping and is back in rotation.';
+    document.getElementById('mBody').textContent='The quiet marker has cleared.';
+    document.getElementById('mRow').style.display='none';
+    document.getElementById('mmLast').textContent='Just now'; document.getElementById('mmWeek').textContent='1';
+  } else if(S.result=='pass'){
+    document.getElementById('mTitle').textContent="Meteor Mite turned down a ping.";
+    document.getElementById('mBody').textContent="Eastgate callout, just now. She has not taken a ping in 5 days. Another comeback ping will follow later.";
+    document.getElementById('mRow').style.display='none';
+  } else if(S.result=='missed'){
+    document.getElementById('mTitle').textContent='Meteor Mite missed a ping.';
+    document.getElementById('mBody').textContent = "Eastgate callout, no answer in 60 seconds. " + (S.reason ? "Her reason: "+S.reason+"." : "She hasn't said why yet.");
+    document.getElementById('mRow').style.display='none';
+  } else { document.getElementById('mTitle').textContent="Meteor Mite hasn't been pinged in 5 days.";
+    document.getElementById('mBody').textContent="Recent pings were missed, not turned down. She's still marked available.";
+    document.getElementById('mRow').style.display='flex'; }
+  if(!S.avail){
+    pill.className='pill off'; pill.textContent='Not available'; m.className='marker off';
+    if(S.result!='pass' && S.by=='handler'){
+      document.getElementById('mTitle').textContent='You marked Meteor Mite not available.';
+      document.getElementById('mBody').textContent='No pings will be sent until she is available again.';
+      document.getElementById('mRow').style.display='none';
+    } else if(S.result!='pass'){
+      document.getElementById('mTitle').textContent='Meteor Mite marked herself not available.';
+      document.getElementById('mBody').textContent = (S.result=='missed' && S.reason ? 'She missed a ping. Reason: '+S.reason+'. ' : '') + 'She changed her status on her phone. No pings will be sent until she is available again.';
+      document.getElementById('mRow').style.display='none';
+    }
+  }
+  document.getElementById('hbtn').textContent = S.avail ? 'Mark not available' : 'Mark available';
+  var h = S.hist.map(function(x){return '<div><span>'+x[0]+'</span><span class="'+(x[2]==2?'taken':'miss')+'">'+x[1]+'</span></div>';}).join('');
+  var ping = (S.ping && !S.avail) ? '<div class="ping" style="border-color:#c9cfdc"><b>Pings paused</b><div class="tiny">You are marked not available. Switch back to available to receive the offered ping.</div></div>'
+    : S.ping ? '<div class="ping"><div class="why"><b>This one\'s for you.</b> You\'ve been passed over lately after a few missed pings.</div><b>Callout · Eastgate</b><div class="tiny">Offered to you now</div><div class="timer"><i id="tbar" style="width:\'+(S.t/60*100)+\'%;transition:width 1s linear"></i></div><div class="tiny" style="margin-top:4px"><span id="tnum">\'+S.t+\'s left</span> · <a href="#" onclick="skipTimer();return false">skip to end (demo)</a></div><div class="big"><button class="take" onclick="answer(\'take\')">Take it</button><button class="pass" onclick="answer(\'pass\')">Turn down</button></div></div>'
+    : S.result=='missed' ? '<div class="ping" style="border-color:#e0a24a"><b>You missed this ping.</b><div class="tiny">Tell Kip why so he knows what happened.</div>'+(S.reason ? '<div style="margin-top:10px;font-size:13px">Sent to Kip: <b>'+S.reason+'</b></div>'+(S.askStatus ? '<div class="why" style="margin-top:10px"><b>Change your status to Not available?</b><br>You won\'t be offered pings until you switch back.<div class="big"><button class="take" onclick="answerStatus(true)">Yes, change it</button><button class="pass" onclick="answerStatus(false)">No, stay available</button></div></div>' : '') : '<div style="display:flex;flex-direction:column;gap:6px;margin-top:10px"><button class="ghost" onclick="chooseReason(\'Not available\')">I was not available</button><button class="ghost" onclick="chooseReason(\'No service\')">No service</button><button class="ghost" onclick="chooseReason(\'Didn\\\'t hear it\')">I didn\'t hear it</button></div>')+'</div>'
+    : !S.result ? '<div class="ping" style="border-color:#c9cfdc"><b>'+(S.avail?'Open for calls':'Not receiving pings')+'</b><div class="tiny">'+(S.avail?'No current pings. We\'ll alert you when one comes in.':'You are marked not available.')+'</div></div>'
+    : '<div class="ping" style="border-color:#c9cfdc"><b>'+(S.result=='take'?'You took it. Welcome back.':'Turned down.')+'</b><div class="tiny">'+(S.result=='take'?'You are back in normal rotation.':'Another may follow later.')+'</div></div>';
+  document.getElementById('screen').innerHTML = '<h3>Meteor Mite</h3><div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span class="pill '+(S.avail?'ok':'off')+'">'+(S.avail?'Available':'Not available')+'</span><button class="ghost" onclick="toggleAvail()">Switch to '+(S.avail?'Not available':'Available')+'</button></div>'+(S.by=='handler'?'<div class="tiny" style="margin-top:6px">Your handler, Kip, marked you not available.</div>':'')+ping+'<div class="score"><b>Your recent acceptance</b> <span class="tiny">(illustrative)</span><div class="bar"><i style="width:'+Math.round(S.score*100)+'%"></i><u></u></div><div class="row2"><span>0</span><span>typical 0.50</span><span>1</span></div><div style="margin-top:6px;font-size:13px">Score <b>'+S.score.toFixed(2)+'</b>. Taking a ping adds 0.08; missing or turning one down subtracts 0.12.</div></div>'+'<div class="hist"><b>Your recent pings</b>'+h+'</div>';
+}
+init();
+</script>
+</body>
+</html>
